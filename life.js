@@ -1,0 +1,233 @@
+import {Grid} from "./grid.js";
+
+export class Life {
+constructor (size, generationInterval = 0.3, initiallyLiving = 0.5) {
+this.size = size;
+this.initiallyLiving = initiallyLiving;
+this.cellCount = Math.pow(this.size, 2);
+this.current = new Grid(size, size);
+this.next = new Grid(size, size);
+this.stopCallback = null;
+this.generationInterval = generationInterval;
+this.audio = initializeAudio(size, generationInterval);
+console.debug(`created 2 grids of size ${this.size} containing ${this.cellCount} cells.`);
+} // constructor
+
+start () {
+const self = this;
+self.shouldStop = false;
+let generationCount = 0;
+seedGrid(self.current, this.initiallyLiving * this.cellCount);
+self.startAudio();
+self.alive = {};
+
+setTimeout(function _tick () {
+generationCount += 1;
+self.generation = generationCount;
+if (generationCount % 50 === 0) statusMessage(`generation ${generationCount}`);
+self.present();
+self.alive = calculateNextGeneration(self.current, self.next, generationCount);
+
+if (self.shouldStop || self.alive.current === 0 || self.alive.next === 0) {
+self.stopAudio();
+if (self.stopCallback && self.stopCallback instanceof Function) self.stopCallback(self.alive);
+else if (self.shouldStop) statusMessage(`Stopped at generation ${generationCount}`);
+else statusMessage(`All dead at generation ${generationCount}: alive = ${self.alive.current}, ${self.alive.next}.`);
+
+return;
+} // if
+
+self.flip();
+setTimeout(_tick, self.generationInterval * 1000);
+}, self.generationInterval * 1000);
+} // start
+
+stop () {
+this.shouldStop = true;
+} // stop
+
+flip () {
+const t = this.current;
+this.current = this.next;
+this.next = t;
+} // flip
+
+startAudio () {
+this.audio.output.gain.value = Math.max(7/this.cellCount, 0.3);
+} // startAudio
+
+stopAudio () {
+this.audio.output.gain.value = 0;
+} // stopAudio
+
+present () {
+this.sonify();
+} // present
+
+sonify () {
+const grid = this.current;
+const audio = this.audio;
+const size = this.size;
+const cellCount = this.size;
+
+for (let i = 0; i<cellCount; i++) {
+const alive = grid.buffer[i];
+audio.position[i].gain.value = alive;
+} // for
+} // sonify
+} // class Life
+
+function calculateNextGeneration (current, next) {
+/* - if the sum of all nine fields in a given neighbourhood is three, the inner field state for the next generation will be life;
+- if the all-field sum is four, the inner field retains its current state;
+- and every other sum sets the inner field to death. 
+*/
+
+const size = current.rowCount;
+let currentSum = 0;
+let nextSum = 0;
+
+for (let r = 0; r < size; r++) {
+for (let c = 0; c <  size; c++) {
+const currentCell = current.getValue(r, c);
+const sum = currentCell + sumNeighbors(current, r, c);
+
+if (sum === 3) next.setValue(r, c, 1);
+else if (sum === 4) next.setValue(r, c, currentCell);
+else next.setValue(r, c, 0);
+
+currentSum += currentCell;
+nextSum += next.getValue(r, c);
+} // column
+} // row
+
+return {current: currentSum, next: nextSum};
+} // calculateNextGeneration
+
+function neighbors (r, c) {
+return [].concat([
+[r+1,c], [r-1,c],
+[r,c+1], [r,c-1],
+[r-1,c-1], [r-1,c+1],
+[r+1,c-1], [r+1,c+1]
+]); // concat
+} // neighbors
+
+export function statusMessage (text) {
+const status = document.querySelector("#status");
+if (status) {
+status.innerHTML = text;
+//setTimeout(() => status.innerHTML = "", 5000);
+} else if (alert) {
+alert(text);
+} else {
+console.log(text);
+} // if
+} // statusMessage
+
+function seedGrid (grid, count = 10) {
+if (grid.rowCount < 2 || grid.rowCount !== grid.columnCount) {
+statusMessage("grid must be square with size greater than 1.");
+throw new Error(`invalid grid size: ${grid.rowCount}, ${grid.columnCount}`);
+} // if
+statusMessage(`seeding grid with ${count} values...`);
+
+const maxIndex = grid.rowCount-1;
+let values = 0;
+while (values < count) {
+const r = random(0, maxIndex);
+const c = random(0, maxIndex);
+
+if (grid.getValue(r, c) === 0) {
+choose(2, neighbors(r, c))
+.forEach(neighbor => grid.setValue(...neighbor, 1));
+values += 1;
+} // if
+} // while
+
+statusMessage(`seeded grid with ${values} values.`);
+} // seedGrid
+
+function choose (n, a) {
+if (n > a.length) return [];
+else if (n === a.length) return a;
+
+const indicies = [];
+do {
+const index = random(0, a.length-1);
+if (!indicies.includes(index)) indicies.push(index);
+} while (indicies.length < n);
+
+return indicies.map(i => a[i]);
+} // choose
+
+function sumNeighbors (grid, r, c) {
+return neighbors(r, c)
+.reduce((sum, neighbor) => {
+sum += grid.getValue(...neighbor);
+return sum;
+}, 0);
+} // sumNeighbors
+
+
+function random (a, b) {
+return Math.floor(Math.random() * (b-a) + a);
+} // random
+
+function initializeAudio (size, generationInterval) {
+const cellCount = size * size;
+
+const audio = {
+context: new AudioContext(),
+position: [],
+};
+
+audio.source = {live: createSource(1), dead: createSource(0)};
+audio.output = audio.context.createGain();
+audio.compressor = audio.context.createDynamicsCompressor();
+audio.compressor.threshold.value = -5;
+audio.compressor.knee.value = 0;
+audio.compressor.ratio.value = 20;
+audio.compressor.attack.value = audio.compressor.release.value = (0.9*generationInterval)/2;
+
+audio.context.listener.setPosition(size/2, 0, size/2);
+audio.context.listener.setOrientation(0,0,0, 0,0,0);
+
+audio.output.gain.value = 0;
+audio.compressor.connect(audio.output).connect(audio.context.destination);
+console.debug("audio initialized\n");
+
+for (let r = 0; r < size; r++) {
+for (let c = 0; c < size; c++) {
+audio.position[r*size+c] = createPositioner(r, c, size);
+} // for c
+} // for r
+//console.debug("audio positioners created\n", audio);
+return audio;
+
+
+function createPositioner (r, c, size) {
+const p = audio.context.createPanner();
+const g = audio.context.createGain();
+p.coneInnerAngle = p.coneOuterAngle = 360;
+p.coneOuterGain = 0;
+p.orientationX.value = p.orientationY.value = p.orientationZ.value  = 0;
+p.panningModel = "equalpower";
+p.positionX.value  = r;
+p.positionZ.value  = c;
+p.refDistance = size/2 + 1;
+g.gain.value = 0;
+
+audio.source.live.connect(g).connect(p).connect(audio.compressor);
+return g;
+} // createPositioner
+
+function createSource (state) {
+const liveFrequency = 880;
+const deadFrequency = 110;
+const oscillator = audio.context.createOscillator();
+oscillator.frequency.value = state? liveFrequency : deadFrequency;
+oscillator.start();
+return oscillator;
+} // createSource
+} // initializeAudio

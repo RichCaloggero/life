@@ -1,0 +1,99 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Life</title>
+</head>
+<body>
+<h1>Life</h1>
+<fieldset id="parameters">
+<legend><h2>Parameters</h2></legend>
+<label>Grid size: <input type="number" id="size" value="10" min="3" max="100" accesskey="s"></label>
+<br><label>Generation interval: <input type="number" id="interval" value="0.1" min="0.005" max="1.0" step="0.005" accesskey="i"></label>
+<br><label>Initially living: <input type="number" id="seed" value="0.5" min="0" max="1" step="0.01" accesskey="l"></label>
+</fieldset>
+
+<div>
+<button id="initialize" accesskey="g">Initialize</button>
+<button id="start" aria-pressed="false">Start</button>
+<button id="alive">Alive counts</button>
+<button id="living">Living cells</button>
+ </div>
+
+<div id="status" aria-live="polite"></div>
+
+<script type="module">
+import {Life, statusMessage} from "./life.js";
+statusMessage("Ready.");
+
+const parameters = document.querySelector("#parameters");
+const start = document.querySelector("#start");
+const alive = document.querySelector("#alive");
+const living = document.querySelector("#living");
+const initialize = document.querySelector("#initialize");
+let life;
+init();
+
+life.stopCallback = () => {
+start.setAttribute("aria-pressed", "false");
+report("stopped");
+};
+
+start.addEventListener("click", e => {
+let state = e.target.getAttribute("aria-pressed") === "true";
+state = !state;
+e.target.setAttribute("aria-pressed", state? "true" : "false");
+
+if (state) life.start();
+else life.stop();
+}); // click handler
+
+alive .addEventListener("click", () => report());
+living.addEventListener("click", () => reportLivingCells());
+
+initialize.addEventListener("click", () => {
+life.stop();
+init();
+}); // init
+
+function init () {
+life = new Life(
+...Array.from(parameters.querySelectorAll("input"))
+.map(element => Number(element.value))
+);
+} // initialize
+
+
+function report (stopped) {
+const sameCells = (life.alive.current === life.alive.next && compareGrids(life.current, life.next))? 
+"(same cells)" : "";
+ 
+if (stopped) {
+statusMessage(`
+stopped at generation ${life.generation}
+with ${life.alive.current} living cells and ${life.alive.next} alive in next generation ${sameCells}.
+`);
+} else {
+statusMessage(`${life.generation}: ${life.alive.current}, ${life.alive.next} ${sameCells}`);
+} // if
+} // report
+
+function reportLivingCells () {
+statusMessage(`current: ${livingCells(life.current).join(", ")}\n
+next: ${livingCells(life.next).join(", ")}
+`);
+} // reportLivingCells
+
+function livingCells (g) {
+return Array.from(g.buffer.entries())
+.filter(x => x[1] !== 0)
+.map(x => x[0]);
+} // livingCells
+
+function compareGrids (g1, g2) {
+return g1.buffer.every((x,i) => g2.buffer[i] === x);
+} // compareGrids
+</script>
+
+</body>
+</html>
