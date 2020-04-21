@@ -1,0 +1,102 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>panner</title>
+</head>
+<body>
+<h1>panner</h1>
+<fieldset id="parameters">
+<legend><h2>Parameters</h2></legend>
+<label>listener: <input type="text" id="listener" value="5 5" accesskey="l"></label>
+<label>panner: <input type="text" id="panner" value="0 0" accesskey="p"></label>
+</fieldset>
+
+<fieldset id="control">
+<legend><h2>Control</h2></legend>
+<div>
+<label>start: <input type="checkbox" id="start" accesskey="s"></label>
+ </div>
+</fieldset>
+
+<div id="status" aria-live="polite"></div>
+
+<script>
+c = new AudioContext();
+const p = c.createPanner();
+const l = c.listener;
+const s = c.createOscillator();
+
+p.panningModel = "HRTF";
+p.refDistance = 15;
+p.setOrientation(0,0,0);
+l.setOrientation(-1,0,0, 0,1,0);
+
+s.frequency.value = 440;
+g = c.createGain();
+g.gain.value= 0;
+s.connect(p).connect(g).connect(c.destination);
+
+setPannerPosition(...getCoordinates(_valueOf("panner")));
+setListenerPosition(...getCoordinates(_valueOf("listener")));
+s.start();
+
+let run = true;
+$("#start").addEventListener("click", e => {
+if (e.target.checked) {
+run = true;
+beep(0.3, 0.2, 1)
+} else {
+run = false;
+} // if
+});
+
+$("#panner").addEventListener("click", e => setPannerPosition(...getCoordinates(e.target.value)));
+$("#listener").addEventListener("click", e => setPannerPosition(...getCoordinates(e.target.value)));
+
+$("#panner").addEventListener("keydown", sendClick);
+$("#listener").addEventListener("keydown", sendClick);
+
+function setPannerPosition (r, c) {
+p.positionX.value = c;
+p.positionZ.value = r;
+} // setPannerPosition
+
+function setListenerPosition (x, y) {
+l.setPosition(x, 0, y);
+} // setListenerPosition
+
+function getCoordinates (text) {
+const values = text.split(/,*[ ]+/);
+return [Number(values[0]), Number(values[1])];
+} // getCoordinates
+
+function beep (value, on, off) {
+g.gain.value = value;
+if (run) {
+setTimeout(() => {
+g.gain.value = 0;
+setTimeout(() => beep(value, on, off), off*1000);
+}, on*1000);
+
+} else {
+g.gain.value = 0;
+} // if
+} // beep
+
+function sendClick (e) {
+if (e.key === "Enter") {
+e.target.dispatchEvent(new CustomEvent("click"));
+e.preventDefault();
+} // if
+} // sendClick
+
+function _valueOf (id, context) {return $(`#${id}`, context).value;}
+
+function $ (selector, context = document) {
+return context.querySelector(selector);
+} // $
+</script>
+
+</body>
+</html>

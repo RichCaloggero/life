@@ -9,37 +9,22 @@ this.current = new Grid(size, size);
 this.next = new Grid(size, size);
 this.stopCallback = null;
 this.generationInterval = generationInterval;
+this.generation = 0;
 this.audio = initializeAudio(size, generationInterval);
-console.debug(`created 2 grids of size ${this.size} containing ${this.cellCount} cells.`);
+this.testMode = false;
+this.alive = {current: -1, next: -1};
+statusMessage(`created 2 grids of size ${this.size} containing ${this.cellCount} cells.`);
 } // constructor
 
 start () {
 const self = this;
 self.shouldStop = false;
-let generationCount = 0;
+self.generation = 0;
 seedGrid(self.current, this.initiallyLiving * this.cellCount);
 self.startAudio();
-self.alive = {};
+self.alive = {current: -1, next: -1};
 
-setTimeout(function _tick () {
-generationCount += 1;
-self.generation = generationCount;
-if (generationCount % 50 === 0) statusMessage(`generation ${generationCount}`);
-self.present();
-self.alive = calculateNextGeneration(self.current, self.next, generationCount);
-
-if (self.shouldStop || self.alive.current === 0 || self.alive.next === 0) {
-self.stopAudio();
-if (self.stopCallback && self.stopCallback instanceof Function) self.stopCallback(self.alive);
-else if (self.shouldStop) statusMessage(`Stopped at generation ${generationCount}`);
-else statusMessage(`All dead at generation ${generationCount}: alive = ${self.alive.current}, ${self.alive.next}.`);
-
-return;
-} // if
-
-self.flip();
-setTimeout(_tick, self.generationInterval * 1000);
-}, self.generationInterval * 1000);
+_tick(self);
 } // start
 
 stop () {
@@ -53,12 +38,14 @@ this.next = t;
 } // flip
 
 startAudio () {
-this.audio.output.gain.value = Math.max(7/this.cellCount, 0.3);
+this.audio.output.gain.value = 0.2;
+//this.audio.output.gain.value = Math.max(7/this.cellCount, 0.3);
 } // startAudio
 
 stopAudio () {
 this.audio.output.gain.value = 0;
 } // stopAudio
+
 
 present () {
 this.sonify();
@@ -68,14 +55,83 @@ sonify () {
 const grid = this.current;
 const audio = this.audio;
 const size = this.size;
-const cellCount = this.size;
+const cellCount = this.cellCount;
+const total = sum(grid.buffer);
+this.audio.output.gain.value = total !== 0?
+.04/total : 0;
 
 for (let i = 0; i<cellCount; i++) {
 const alive = grid.buffer[i];
-audio.position[i].gain.value = alive;
+audio.position[i].gain.gain.value = alive;
+const p = audio.position[i].panner;
+/*if (alive !== 0) statusMessage(`
+${Math.floor(i/size)}, ${i%size}
+= ${p.positionZ.value.toFixed(2)}, ${p.positionX.value.toFixed(2)}`
+);
+*/
+//debugger;
 } // for
 } // sonify
+
+/// test mode
+enableTestMode (enable) {
+this.testMode = !!enable;
+if (enable) {
+this.startAudio();
+this.generation = 0;
+this.alive = {current: -1, next: -1};
+this.shouldStop = false;
+} else {
+this.stop();
+this.stopAudio();
+} // if
+} // testMode
+
+clear () {if (this.testMode) this.current.buffer.fill(0);}
+
+step () {
+if(this.testMode) {
+const self = this;
+self.startAudio();
+self.shouldStop = false;
+_tick(this);
+setTimeout(() => self.stopAudio(), 500);
+} // if
+} // step
+
+setCell (r, c) {
+if (this.testMode) {
+this.alive = {current: -1, next: -1};
+this.shouldStop = false;
+this.current.setValue(r, c, 1);
+//statusMessage(`${[r,c]}`);
+} // if
+} // setCell
+
 } // class Life
+
+function _tick (self) {
+if (self.alive.current === 0) return;
+self.generation += 1;
+if (self.generation % 50 === 0) statusMessage(`generation ${self.generation}`);
+self.present();
+self.alive = calculateNextGeneration(self.current, self.next, self.generation);
+
+
+if (self.shouldStop || self.alive.current === 0) {
+self.stopAudio();
+
+if (self.stopCallback && self.stopCallback instanceof Function) self.stopCallback(self.alive);
+else if (self.shouldStop) statusMessage(`Stopped at generation ${self.generation}`);
+else statusMessage(`All dead at generation ${self.generation}: alive = ${self.alive.current}, ${self.alive.next}.`);
+
+return;
+} // if
+
+self.flip();
+if (!self.testMode) setTimeout(() => _tick(self), self.generationInterval * 1000);
+else statusMessage(`Generation ${self.generation}`);
+} // _tick
 
 function calculateNextGeneration (current, next) {
 /* - if the sum of all nine fields in a given neighbourhood is three, the inner field state for the next generation will be life;
@@ -113,10 +169,11 @@ return [].concat([
 ]); // concat
 } // neighbors
 
-export function statusMessage (text) {
+export function statusMessage (text, append) {
 const status = document.querySelector("#status");
 if (status) {
-status.innerHTML = text;
+status.innerHTML = append? `${status.innerHTML}<br>${text}`
+: text;
 //setTimeout(() => status.innerHTML = "", 5000);
 } else if (alert) {
 alert(text);
@@ -162,13 +219,11 @@ return indicies.map(i => a[i]);
 } // choose
 
 function sumNeighbors (grid, r, c) {
-return neighbors(r, c)
-.reduce((sum, neighbor) => {
-sum += grid.getValue(...neighbor);
-return sum;
-}, 0);
+return sum(neighbors(r, c)
+.map(coordinates => grid.getValue(...coordinates)));
 } // sumNeighbors
 
+function sum (a) {return a.reduce((sum, x) => sum += x, 0);}
 
 function random (a, b) {
 return Math.floor(Math.random() * (b-a) + a);
@@ -185,16 +240,17 @@ position: [],
 audio.source = {live: createSource(1), dead: createSource(0)};
 audio.output = audio.context.createGain();
 audio.compressor = audio.context.createDynamicsCompressor();
-audio.compressor.threshold.value = -5;
+audio.compressor.threshold.value = -15;
 audio.compressor.knee.value = 0;
 audio.compressor.ratio.value = 20;
 audio.compressor.attack.value = audio.compressor.release.value = (0.9*generationInterval)/2;
 
-audio.context.listener.setPosition(size/2, 0, size/2);
+audio.context.listener.setPosition(0, 0, 0);
 audio.context.listener.setOrientation(0,0,0, 0,0,0);
 
 audio.output.gain.value = 0;
-audio.compressor.connect(audio.output).connect(audio.context.destination);
+//audio.compressor.connect(audio.output)
+audio.output.connect(audio.context.destination);
 console.debug("audio initialized\n");
 
 for (let r = 0; r < size; r++) {
@@ -209,25 +265,36 @@ return audio;
 function createPositioner (r, c, size) {
 const p = audio.context.createPanner();
 const g = audio.context.createGain();
-p.coneInnerAngle = p.coneOuterAngle = 360;
-p.coneOuterGain = 0;
+p.coneInnerAngle = 360;
+//p.coneOuterAngle = 0;
+//p.coneOuterGain = 1;
 p.orientationX.value = p.orientationY.value = p.orientationZ.value  = 0;
 p.panningModel = "equalpower";
-p.positionX.value  = r;
-p.positionZ.value  = c;
-p.refDistance = size/2 + 1;
+p.refDistance = 0.5;
+p.rollofFactor = 0.5;
 g.gain.value = 0;
 
-audio.source.live.connect(g).connect(p).connect(audio.compressor);
-return g;
+p.positionX.value = -scale(c, 0,size, -1,1);
+p.positionZ.value = scale(r, 0,size, -1,1);
+
+audio.source.live.connect(p).connect(g).connect(audio.output);
+//audio.source.live.connect(g).connect(p).connect(audio.compressor);
+return {gain: g, panner: p};
 } // createPositioner
 
 function createSource (state) {
-const liveFrequency = 880;
+const liveFrequency = 440;
 const deadFrequency = 110;
 const oscillator = audio.context.createOscillator();
 oscillator.frequency.value = state? liveFrequency : deadFrequency;
+oscillator.onended = () => statusMessage(`source ${oscillator.frequency.value} died.`);
 oscillator.start();
 return oscillator;
 } // createSource
 } // initializeAudio
+
+
+function scale (_in, _inMin, _inMax, _outMin, _outMax) {
+const scaleFactor = Math.abs(_outMax-_outMin) / Math.abs(_inMax-_inMin);
+return scaleFactor * _in + _outMin;
+} // scale

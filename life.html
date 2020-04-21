@@ -13,12 +13,23 @@
 <br><label>Initially living: <input type="number" id="seed" value="0.5" min="0" max="1" step="0.01" accesskey="l"></label>
 </fieldset>
 
+<fieldset id="control">
+<legend><h2>Control</h2></legend>
 <div>
 <button id="initialize" accesskey="g">Initialize</button>
-<button id="start" aria-pressed="false">Start</button>
+<button id="start" aria-pressed="false" accesskey="r">Start</button>
 <button id="alive">Alive counts</button>
 <button id="living">Living cells</button>
- </div>
+ </div><div>
+<label>Test mode: <input type="checkbox" id="testMode" accesskey="t"></label>
+<label>Set: <input type="text" id="coordinates" value="0 0" accesskey="c"></label>
+<button id="step">Step</button>
+<button id="clear">Clear</button>
+<span role="application">
+<button id="explore" accesskey="e">Explore</button>
+</span>
+</div>
+</fieldset>
 
 <div id="status" aria-live="polite"></div>
 
@@ -26,11 +37,11 @@
 import {Life, statusMessage} from "./life.js";
 statusMessage("Ready.");
 
-const parameters = document.querySelector("#parameters");
-const start = document.querySelector("#start");
-const alive = document.querySelector("#alive");
-const living = document.querySelector("#living");
-const initialize = document.querySelector("#initialize");
+const parameters = $("#parameters");
+const start = $("#start");
+const alive = $("#alive");
+const living = $("#living");
+const initialize = $("#initialize");
 let life;
 init();
 
@@ -56,8 +67,69 @@ life.stop();
 init();
 }); // init
 
+$("#testMode").addEventListener("change", e => life.enableTestMode(e.target.checked));
+$("#coordinates").addEventListener("click", e => {
+const value = e.target.value.split(/,*[ ]+/);
+life.setCell(Number(value[0]), Number(value[1]));
+}); // coordinates
+
+$("#step").addEventListener("click", () => life.step());
+$("#clear").addEventListener("click", () => life.clear());
+
+$("#coordinates").addEventListener("keydown", e => {
+switch (e.key) {
+case "Enter": e.target.dispatchEvent(new CustomEvent("click"));
+break;
+default: return;
+} // switch
+e.preventDefault();
+}); // send click
+
+$("#explore").addEventListener("keydown", exploreHandler);
+
+let coordinates = [0,0];
+function exploreHandler (e) {
+if (life.testMode) {
+let [r,c] = coordinates;
+const size = life.size;
+
+switch (e.key) {
+case "ArrowLeft": c -= 1; break;
+case "ArrowRight": c += 1; break;
+case "ArrowDown": r -= 1; break;
+case "ArrowUp": r += 1; break;
+
+default: return;
+} // switch
+
+e.preventDefault();
+//r = clamp(r, 0, size-1, "row out of bounds");
+//c = clamp(c, 0, size-1, "column out of bounds");
+life.clear();
+life.setCell(r, c);
+life.startAudio();
+life.sonify();
+setTimeout(() => life.stopAudio(), 300);
+coordinates = [r,c];
+
+function clamp (value, min, max, message) {
+if (value >= min && value <= max) return value;
+if (value > max) value = max;
+else value = min;
+statusMessage(message);
+return value;
+} // clamp
+} // if
+} // exploreGridHandler
+
+
+function getCoordinates (text) {
+const values = text.split(/,*[ ]+/);
+return [Number(values[0]), Number(values[1])];
+} // getCoordinates
+
 function init () {
-life = new Life(
+window.life = life = new Life(
 ...Array.from(parameters.querySelectorAll("input"))
 .map(element => Number(element.value))
 );
@@ -69,10 +141,10 @@ const sameCells = (life.alive.current === life.alive.next && compareGrids(life.c
 "(same cells)" : "";
  
 if (stopped) {
-statusMessage(`
+statusMessage(`<p>
 stopped at generation ${life.generation}
 with ${life.alive.current} living cells and ${life.alive.next} alive in next generation ${sameCells}.
-`);
+</p>`);
 } else {
 statusMessage(`${life.generation}: ${life.alive.current}, ${life.alive.next} ${sameCells}`);
 } // if
@@ -93,6 +165,13 @@ return Array.from(g.buffer.entries())
 function compareGrids (g1, g2) {
 return g1.buffer.every((x,i) => g2.buffer[i] === x);
 } // compareGrids
+
+
+function _valueOf (id, context) {return Number($(`#${id}`, context).value);}
+
+function $ (selector, context = document) {
+return context.querySelector(selector);
+} // $
 </script>
 
 </body>
