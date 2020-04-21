@@ -51,24 +51,24 @@ present () {
 this.sonify();
 } // present
 
-sonify () {
+sonify (includeDeadCells) {
 const grid = this.current;
 const audio = this.audio;
 const size = this.size;
 const cellCount = this.cellCount;
+if (includeDeadCells) {
+audio.output.gain.value = 0.1/cellCount;
+} else {
 const total = sum(grid.buffer);
 this.audio.output.gain.value = total !== 0?
 .04/total : 0;
+} // if
 
 for (let i = 0; i<cellCount; i++) {
 const alive = grid.buffer[i];
-audio.position[i].gain.gain.value = alive;
-const p = audio.position[i].panner;
-/*if (alive !== 0) statusMessage(`
-${Math.floor(i/size)}, ${i%size}
-= ${p.positionZ.value.toFixed(2)}, ${p.positionX.value.toFixed(2)}`
-);
-*/
+const p = audio.position[i];
+p.alive.gain.value = alive !== 0? 1 : 0;
+if (includeDeadCells) p.dead.gain.value = alive === 0? 1 : 0;
 //debugger;
 } // for
 } // sonify
@@ -237,7 +237,7 @@ context: new AudioContext(),
 position: [],
 };
 
-audio.source = {live: createSource(1), dead: createSource(0)};
+audio.source = {alive: createSource(1), dead: createSource(0)};
 audio.output = audio.context.createGain();
 audio.compressor = audio.context.createDynamicsCompressor();
 audio.compressor.threshold.value = -15;
@@ -264,7 +264,10 @@ return audio;
 
 function createPositioner (r, c, size) {
 const p = audio.context.createPanner();
-const g = audio.context.createGain();
+const alive = audio.context.createGain();
+const dead = audio.context.createGain();
+alive.gain.value = dead.gain.value = 0;
+
 p.coneInnerAngle = 360;
 //p.coneOuterAngle = 0;
 //p.coneOuterGain = 1;
@@ -272,14 +275,14 @@ p.orientationX.value = p.orientationY.value = p.orientationZ.value  = 0;
 p.panningModel = "equalpower";
 p.refDistance = 0.5;
 p.rollofFactor = 0.5;
-g.gain.value = 0;
 
 p.positionX.value = -scale(c, 0,size, -1,1);
 p.positionZ.value = scale(r, 0,size, -1,1);
 
-audio.source.live.connect(p).connect(g).connect(audio.output);
-//audio.source.live.connect(g).connect(p).connect(audio.compressor);
-return {gain: g, panner: p};
+audio.source.alive.connect(alive).connect(p);
+audio.source.dead.connect(dead).connect(p);
+p.connect(audio.output);
+return {alive, dead, panner: p};
 } // createPositioner
 
 function createSource (state) {
