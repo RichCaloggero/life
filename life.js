@@ -10,7 +10,7 @@ this.next = new Grid(size, size);
 this.stopCallback = null;
 this.generationInterval = generationInterval;
 this.generation = 0;
-this.audio = initializeAudio(size, generationInterval);
+this.audio = initializeAudio(size, this.panningModel);
 this.testMode = false;
 this.alive = {current: -1, next: -1};
 statusMessage(`created 2 grids of size ${this.size} containing ${this.cellCount} cells.`);
@@ -20,6 +20,7 @@ start () {
 const self = this;
 self.shouldStop = false;
 self.generation = 0;
+self.clear();
 seedGrid(self.current, this.initiallyLiving * this.cellCount);
 self.startAudio();
 self.alive = {current: -1, next: -1};
@@ -51,12 +52,13 @@ present () {
 this.sonify();
 } // present
 
-sonify (includeDeadCells) {
+sonify (aliveSound = "noise", deadSound) {
+if (!aliveSound && !deadSound) return;
 const grid = this.current;
 const audio = this.audio;
 const size = this.size;
 const cellCount = this.cellCount;
-if (includeDeadCells) {
+if (aliveSound && deadSound) {
 audio.output.gain.value = 0.1/cellCount;
 } else {
 const total = sum(grid.buffer);
@@ -65,13 +67,26 @@ this.audio.output.gain.value = total !== 0?
 } // if
 
 for (let i = 0; i<cellCount; i++) {
-const alive = grid.buffer[i];
+const cellValue = grid.buffer[i];
 const p = audio.position[i];
-p.alive.gain.value = alive !== 0? 1 : 0;
-if (includeDeadCells) p.dead.gain.value = alive === 0? 1 : 0;
+if (aliveSound )
+p[aliveSound].gain.value = cellValue !== 0? 1 : 0;
+
+if (deadSound )
+p[deadSound].gain.value = cellValue !== 0? 1 : 0;
+
 //debugger;
 } // for
 } // sonify
+
+setFilter (frequency, q) {
+audio.position.forEach(p => {
+p.filter.frequency.value = frequency;
+p.filter.Q.value = q;
+}); // forEach
+} // setFilter
+
+clear () {this.current.buffer.fill(0);}
 
 /// test mode
 enableTestMode (enable) {
@@ -87,7 +102,6 @@ this.stopAudio();
 } // if
 } // testMode
 
-clear () {if (this.testMode) this.current.buffer.fill(0);}
 
 step () {
 if(this.testMode) {
@@ -237,13 +251,8 @@ context: new AudioContext(),
 position: [],
 };
 
-audio.source = {alive: createSource(1), dead: createSource(0)};
+audio.source = {highTone: createTone(220), lowTone: createTone(110), noise: createNoiseSource()};
 audio.output = audio.context.createGain();
-audio.compressor = audio.context.createDynamicsCompressor();
-audio.compressor.threshold.value = -15;
-audio.compressor.knee.value = 0;
-audio.compressor.ratio.value = 20;
-audio.compressor.attack.value = audio.compressor.release.value = (0.9*generationInterval)/2;
 
 audio.context.listener.setPosition(0, 0, 0);
 audio.context.listener.setOrientation(0,0,0, 0,0,0);
@@ -255,45 +264,65 @@ console.debug("audio initialized\n");
 
 for (let r = 0; r < size; r++) {
 for (let c = 0; c < size; c++) {
-audio.position[r*size+c] = createPositioner(r, c, size);
+audio.position[r*size+c] = createPositioner(r, c, size, panningModel);
 } // for c
 } // for r
 //console.debug("audio positioners created\n", audio);
 return audio;
 
 
-function createPositioner (r, c, size) {
+function createPositioner (r, c, size, panningModel = "equalpower") {
 const p = audio.context.createPanner();
-const alive = audio.context.createGain();
-const dead = audio.context.createGain();
-alive.gain.value = dead.gain.value = 0;
-
 p.coneInnerAngle = 360;
 //p.coneOuterAngle = 0;
 //p.coneOuterGain = 1;
 p.orientationX.value = p.orientationY.value = p.orientationZ.value  = 0;
-p.panningModel = "equalpower";
+p.panningModel = panningModel;
 p.refDistance = 0.5;
 p.rollofFactor = 0.5;
 
 p.positionX.value = -scale(c, 0,size, -1,1);
 p.positionZ.value = scale(r, 0,size, -1,1);
 
-audio.source.alive.connect(alive).connect(p);
-audio.source.dead.connect(dead).connect(p);
+const highTone = audio.context.createGain();
+const lowTone = audio.context.createGain();
+const noise = audio.context.createGain();
+highTone.gain.value = lowTone.gain.value = noise.gain.value = 0;
+
+audio.source.highTone.connect(highTone).connect(p);
+audio.source.lowTone.connect(lowTone).connect(p);
+audio.source.noise.connect(noise).connect(p);
 p.connect(audio.output);
-return {alive, dead, panner: p};
+return {highTone, lowTone, noise, panner: p};
 } // createPositioner
 
-function createSource (state) {
-const liveFrequency = 440;
-const deadFrequency = 110;
+function createTone (frequency) {
 const oscillator = audio.context.createOscillator();
-oscillator.frequency.value = state? liveFrequency : deadFrequency;
+oscillator.frequency.value = frequency;
 oscillator.onended = () => statusMessage(`source ${oscillator.frequency.value} died.`);
 oscillator.start();
 return oscillator;
 } // createSource
+
+
+function createNoiseSource () {
+// 1 second buffer
+const buffer = audio.context.createBuffer(1, audio.context.sampleRate, audio.context.sampleRate);
+  const data = buffer.getChannelData(0);
+for (let i=0; i<data.length; i++) data[i] = scale(Math.random(), 0,1, -1,1);
+
+const source = audio.context.createBufferSource();
+source.buffer = buffer;
+source.loop = true;
+
+const filter = audio.context.createBiquadFilter();
+filter.type = "bandpass";
+filter.frequency.value = 1000;
+filter.Q.value = 1;
+source.connect(filter);
+source.start();
+return filter;
+} // createNoiseSource
 } // initializeAudio
 
 
@@ -301,3 +330,4 @@ function scale (_in, _inMin, _inMax, _outMin, _outMax) {
 const scaleFactor = Math.abs(_outMax-_outMin) / Math.abs(_inMax-_inMin);
 return scaleFactor * _in + _outMin;
 } // scale
+
