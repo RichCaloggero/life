@@ -306,11 +306,13 @@ return oscillator;
 } // createSource
 
 
-function createNoiseSource () {
-// 1 second buffer
-const buffer = audio.context.createBuffer(1, audio.context.sampleRate, audio.context.sampleRate);
+function createNoiseSource (lengthFactor = 1/185) {
+const buffer = audio.context.createBuffer(1, lengthFactor*audio.context.sampleRate, audio.context.sampleRate);
   const data = buffer.getChannelData(0);
-for (let i=0; i<data.length; i++) data[i] = scale(Math.random(), 0,1, -1,1);
+for (let i=0; i<data.length; i++) {
+data[i] = scale(Math.random(), 0,1, -1,1);
+} // for
+data[data.length-1] = data[0];
 
 const source = audio.context.createBufferSource();
 source.buffer = buffer;
