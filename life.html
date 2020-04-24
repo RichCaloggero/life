@@ -69,9 +69,11 @@ init();
 }); // init
 
 $("#testMode").addEventListener("change", e => life.enableTestMode(e.target.checked));
+
 $("#coordinates").addEventListener("click", e => {
-const value = e.target.value.split(/,*[ ]+/);
-life.setCell(Number(value[0]), Number(value[1]));
+e.target.value.split(" ")
+.map(pair => pair.split(","))
+.forEach( pair => life.setCell(Number(pair[0]), Number(pair[1])));
 }); // coordinates
 
 $("#step").addEventListener("click", () => life.step());
@@ -99,7 +101,6 @@ case "ArrowLeft": c -= 1; break;
 case "ArrowRight": c += 1; break;
 case "ArrowDown": r -= 1; break;
 case "ArrowUp": r += 1; break;
-
 default: return;
 } // switch
 

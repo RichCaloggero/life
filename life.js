@@ -108,7 +108,7 @@ if(this.testMode) {
 const self = this;
 self.startAudio();
 self.shouldStop = false;
-_tick(this);
+_tick(self);
 setTimeout(() => self.stopAudio(), 500);
 } // if
 } // step
@@ -139,12 +139,13 @@ if (self.stopCallback && self.stopCallback instanceof Function) self.stopCallbac
 else if (self.shouldStop) statusMessage(`Stopped at generation ${self.generation}`);
 else statusMessage(`All dead at generation ${self.generation}: alive = ${self.alive.current}, ${self.alive.next}.`);
 
-return;
+return self.alive;
 } // if
 
 self.flip();
 if (!self.testMode) setTimeout(() => _tick(self), self.generationInterval * 1000);
 else statusMessage(`Generation ${self.generation}`);
+return self.alive;
 } // _tick
 
 function calculateNextGeneration (current, next) {

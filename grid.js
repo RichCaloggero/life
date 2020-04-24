@@ -25,7 +25,7 @@ return this.columnCount * r + c;
 } // class Grid
 
 function wrap (value, max) {
-if (value > max) return value - max;
+if (value > max) return value-max-1;
 else if (value < 0) return max + value + 1;
 else return value;
 } // wrap
