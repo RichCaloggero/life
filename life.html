@@ -9,7 +9,6 @@
 <fieldset id="parameters">
 <legend><h2>Parameters</h2></legend>
 <label>Grid size: <input type="number" id="size" value="10" min="3" max="100" accesskey="s"></label>
-<br><label>Generation interval: <input type="number" id="interval" value="0.1" min="0.005" max="1.0" step="0.005" accesskey="i"></label>
 <br><label>Initially living: <input type="number" id="seed" value="0.5" min="0" max="1" step="0.01" accesskey="l"></label>
 <br><label>Panning model: <input type="text" id="panningModel" value="HRTF" accesskey="p"></label>
 </fieldset>
@@ -18,10 +17,11 @@
 <legend><h2>Control</h2></legend>
 <div>
 <button id="initialize" accesskey="g">Initialize</button>
+<br><label>Generation interval: <input type="number" id="interval" value="0.1" min="0.005" max="1.0" step="0.005" accesskey="i"></label>
 <button id="start" aria-pressed="false" accesskey="r">Start</button>
 <button id="alive">Alive counts</button>
 <button id="living">Living cells</button>
- </div><div>
+</div><div>
 <label>Test mode: <input type="checkbox" id="testMode" accesskey="t"></label>
 <label>Set: <input type="text" id="coordinates" value="0 0" accesskey="c"></label>
 <button id="step">Step</button>
@@ -43,10 +43,13 @@ const start = $("#start");
 const alive = $("#alive");
 const living = $("#living");
 const initialize = $("#initialize");
-let life;
-init();
 
-life.stopCallback = () => {
+let _alive = _valueOf(alive), _generation = 0, _interval = _valueOf("interval");
+let life = init();
+
+life.stopCallback = (alive, generation) => {
+_alive = alive;
+_generation = generation;
 start.setAttribute("aria-pressed", "false");
 report("stopped");
 };
@@ -56,25 +59,37 @@ let state = e.target.getAttribute("aria-pressed") === "true";
 state = !state;
 e.target.setAttribute("aria-pressed", state? "true" : "false");
 
-if (state) life.start();
+if (state) life.start(_interval, _generation);
 else life.stop();
 }); // click handler
+
+$("#interval").addEventListener("change", e => {
+_interval = Number(e.target.value);
+life.stop();
+life.start(_interval, _generation);
+});
 
 alive .addEventListener("click", () => report());
 living.addEventListener("click", () => reportLivingCells());
 
 initialize.addEventListener("click", () => {
+const callback = life.stopCallback;
 life.stop();
-init();
+life = init();
+life.stopCallback = callback;
+_generation = 0;
 }); // init
 
-$("#testMode").addEventListener("change", e => life.enableTestMode(e.target.checked));
+//$("#testMode").addEventListener("change", e => life.enableTestMode(e.target.checked));
 
 $("#coordinates").addEventListener("click", e => {
-e.target.value.split(" ")
+const values = e.target.value.split(" ")
 .map(pair => pair.split(","))
-.forEach( pair => life.setCell(Number(pair[0]), Number(pair[1])));
+console.debug(`values: ${JSON.stringify(values)}`);
+
+values.forEach( pair => life.setCell(Number(pair[0]), Number(pair[1])));
 }); // coordinates
+
 
 $("#step").addEventListener("click", () => life.step());
 $("#clear").addEventListener("click", () => life.clear());
@@ -131,17 +146,16 @@ return [Number(values[0]), Number(values[1])];
 } // getCoordinates
 
 function init () {
-window.life = life = new Life(
-...Array.from(parameters.querySelectorAll("input"))
-.map(element => element.type === "number" || element.type === "range"? Number(element.value) : element.value)
-);
+return new Life(_valueOf("size"), _valueOf("seed"), _valueOf("panningModel"));
 } // initialize
+
+//life.setBuffer(39, 47, 48, 58, 59);
 
 
 function report (stopped) {
 const sameCells = (life.alive.current === life.alive.next && compareGrids(life.current, life.next))? 
 "(same cells)" : "";
- 
+
 if (stopped) {
 statusMessage(`<p>
 stopped at generation ${life.generation}
@@ -169,7 +183,16 @@ return g1.buffer.every((x,i) => g2.buffer[i] === x);
 } // compareGrids
 
 
-function _valueOf (id, context) {return Number($(`#${id}`, context).value);}
+function _valueOf (element, context) {
+element = typeof(element) === "string"? $(`#${element}`, context) : element;
+return element.hasAttribute("value")? _get(element.value)
+:  (element.hasAttribute("data-value")? _get(element.dataset.value) : "");
+
+function _get(x) {
+return x? (Number(x) || x)
+: "";
+} // _get
+} // _valueOf
 
 function $ (selector, context = document) {
 return context.querySelector(selector);

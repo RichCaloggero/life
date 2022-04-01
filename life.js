@@ -1,31 +1,38 @@
 import {Grid} from "./grid.js";
 
 export class Life {
-constructor (size, generationInterval = 0.3, initiallyLiving = 0.5) {
+constructor (size = 10, initiallyLiving = 0.5, panningModel = "HRTF") {
 this.size = size;
 this.initiallyLiving = initiallyLiving;
+this.panningModel = panningModel;
+
 this.cellCount = Math.pow(this.size, 2);
 this.current = new Grid(size, size);
 this.next = new Grid(size, size);
 this.stopCallback = null;
-this.generationInterval = generationInterval;
 this.generation = 0;
+this.generationInterval = 0;
+
 this.audio = initializeAudio(size, this.panningModel);
 this.testMode = false;
 this.alive = {current: -1, next: -1};
 statusMessage(`created 2 grids of size ${this.size} containing ${this.cellCount} cells.`);
 } // constructor
 
-start () {
+start (generationInterval = 0.1, generation = 0) {
 const self = this;
 self.shouldStop = false;
-self.generation = 0;
-self.clear();
-seedGrid(self.current, this.initiallyLiving * this.cellCount);
-self.startAudio();
-self.alive = {current: -1, next: -1};
+self.generation = generation;
+self.generationInterval = generationInterval;
 
-_tick(self);
+if (sum(self.current.buffer) === 0) {
+self.clear();
+statusMessage(`- ${seedGrid(self.current, this.initiallyLiving * this.cellCount)}`);
+self.alive = {current: -1, next: -1};
+} // if
+
+self.startAudio();
+self.alive = _tick(self);
 } // start
 
 stop () {
@@ -106,8 +113,9 @@ this.stopAudio();
 step () {
 if(this.testMode) {
 const self = this;
-self.startAudio();
+self.alive = {current: -1, next: -1};
 self.shouldStop = false;
+self.startAudio();
 _tick(self);
 setTimeout(() => self.stopAudio(), 500);
 } // if
@@ -115,12 +123,14 @@ setTimeout(() => self.stopAudio(), 500);
 
 setCell (r, c) {
 if (this.testMode) {
-this.alive = {current: -1, next: -1};
-this.shouldStop = false;
 this.current.setValue(r, c, 1);
-//statusMessage(`${[r,c]}`);
+statusMessage(`${[r,c]}`);
 } // if
 } // setCell
+
+setBuffer (...values) {
+values.flat(2).forEach(value => this.current.buffer[value] = 1);
+} // setBuffer
 
 } // class Life
 
@@ -131,11 +141,10 @@ if (self.generation % 50 === 0) statusMessage(`generation ${self.generation}`);
 self.present();
 self.alive = calculateNextGeneration(self.current, self.next, self.generation);
 
-
 if (self.shouldStop || self.alive.current === 0) {
 self.stopAudio();
 
-if (self.stopCallback && self.stopCallback instanceof Function) self.stopCallback(self.alive);
+if (self.stopCallback && self.stopCallback instanceof Function) self.stopCallback(self.alive, self.generation);
 else if (self.shouldStop) statusMessage(`Stopped at generation ${self.generation}`);
 else statusMessage(`All dead at generation ${self.generation}: alive = ${self.alive.current}, ${self.alive.next}.`);
 
@@ -149,11 +158,6 @@ return self.alive;
 } // _tick
 
 function calculateNextGeneration (current, next) {
-/* - if the sum of all nine fields in a given neighbourhood is three, the inner field state for the next generation will be life;
-- if the all-field sum is four, the inner field retains its current state;
-- and every other sum sets the inner field to death. 
-*/
-
 const size = current.rowCount;
 let currentSum = 0;
 let nextSum = 0;
@@ -161,11 +165,13 @@ let nextSum = 0;
 for (let r = 0; r < size; r++) {
 for (let c = 0; c <  size; c++) {
 const currentCell = current.getValue(r, c);
-const sum = currentCell + sumNeighbors(current, r, c);
+const sum = sumNeighbors(current, r, c);
 
-if (sum === 3) next.setValue(r, c, 1);
-else if (sum === 4) next.setValue(r, c, currentCell);
-else next.setValue(r, c, 0);
+if (currentCell === 1) {
+next.setValue(r, c, (sum < 2 || sum > 3)? 0 : 1);
+} else {
+next.setValue(r, c, sum === 3? 1 : 0);
+} // if
 
 currentSum += currentCell;
 nextSum += next.getValue(r, c);
@@ -198,27 +204,27 @@ console.log(text);
 } // statusMessage
 
 function seedGrid (grid, count = 10) {
+const values = [];
+
 if (grid.rowCount < 2 || grid.rowCount !== grid.columnCount) {
 statusMessage("grid must be square with size greater than 1.");
 throw new Error(`invalid grid size: ${grid.rowCount}, ${grid.columnCount}`);
 } // if
 statusMessage(`seeding grid with ${count} values...`);
 
-const maxIndex = grid.rowCount-1;
-let values = 0;
-while (values < count) {
-const r = random(0, maxIndex);
-const c = random(0, maxIndex);
-
-if (grid.getValue(r, c) === 0) {
-choose(2, neighbors(r, c))
-.forEach(neighbor => grid.setValue(...neighbor, 1));
-values += 1;
+const maxIndex = grid.buffer.length-1;
+while (count > 0) {
+const value = random(0, maxIndex);
+if (grid.buffer[value] === 0) {
+grid.buffer[value] = 1;
+count -= 1;
+values.push(value);
 } // if
-} // while
+} // for
 
-statusMessage(`seeded grid with ${values} values.`);
+return values;
 } // seedGrid
+
 
 function choose (n, a) {
 if (n > a.length) return [];
@@ -241,10 +247,10 @@ return sum(neighbors(r, c)
 function sum (a) {return a.reduce((sum, x) => sum += x, 0);}
 
 function random (a, b) {
-return Math.floor(Math.random() * (b-a) + a);
+return Math.floor(Math.random()*Math.random() * (b-a) + a);
 } // random
 
-function initializeAudio (size, generationInterval) {
+function initializeAudio (size, panningModel) {
 const cellCount = size * size;
 
 const audio = {
@@ -308,7 +314,7 @@ return oscillator;
 
 function createNoiseSource (lengthFactor = 1/185) {
 const buffer = audio.context.createBuffer(1, lengthFactor*audio.context.sampleRate, audio.context.sampleRate);
-  const data = buffer.getChannelData(0);
+const data = buffer.getChannelData(0);
 for (let i=0; i<data.length; i++) {
 data[i] = scale(Math.random(), 0,1, -1,1);
 } // for
