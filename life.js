@@ -9,7 +9,7 @@ this.panningModel = panningModel;
 this.cellCount = Math.pow(this.size, 2);
 this.current = new Grid(size, size);
 this.next = new Grid(size, size);
-this.stopCallback = null;
+this.stopCallback = this.sonifyCallback = this.displayCallback = null;
 this.generation = 0;
 this.generationInterval = 0;
 
@@ -27,7 +27,7 @@ self.generationInterval = generationInterval;
 
 if (sum(self.current.buffer) === 0) {
 self.clear();
-statusMessage(`- ${seedGrid(self.current, this.initiallyLiving * this.cellCount)}`);
+if (self.initiallyLiving > 0) statusMessage(`- ${seedGrid(self.current, self.initiallyLiving * self.cellCount)}`);
 self.alive = {current: -1, next: -1};
 } // if
 
@@ -56,7 +56,9 @@ this.audio.output.gain.value = 0;
 
 
 present () {
-this.sonify();
+if (this.displayCallback instanceof Function) this.displayCallback(this.current);
+if (this.sonifyCallback instanceof Function) this.sonifyCallback(this);
+else this.sonify();
 } // present
 
 sonify (aliveSound = "noise", deadSound) {
