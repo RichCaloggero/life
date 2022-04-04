@@ -10,6 +10,7 @@ this.cellCount = Math.pow(this.size, 2);
 this.current = new Grid(size, size);
 this.next = new Grid(size, size);
 this.stopCallback = this.sonifyCallback = this.displayCallback = null;
+this.running = false;
 this.generation = 0;
 this.generationInterval = 0;
 
@@ -32,6 +33,7 @@ self.alive = {current: -1, next: -1};
 } // if
 
 self.startAudio();
+self.running = true;
 self.alive = _tick(self);
 } // start
 
@@ -53,7 +55,6 @@ this.audio.output.gain.value = 0.2;
 stopAudio () {
 this.audio.output.gain.value = 0;
 } // stopAudio
-
 
 present () {
 if (this.displayCallback instanceof Function) this.displayCallback(this.current);
@@ -87,6 +88,21 @@ p[deadSound].gain.value = cellValue !== 0? 1 : 0;
 //debugger;
 } // for
 } // sonify
+
+
+sonifyPosition (index, sound = "noise") {
+if (this.running) return;
+const self = this;
+//debugger;
+const p = self.audio.position[index][sound];
+self.audio.output.gain.value = 0.5;
+p.gain.value = 0.5;
+setTimeout (() => {
+self.audio.output.gain.value = 0;
+p.gain.value = 0;
+}, 500);
+} // sonifyPosition
+
 
 setFilter (frequency, q) {
 audio.position.forEach(p => {
@@ -145,6 +161,7 @@ self.alive = calculateNextGeneration(self.current, self.next, self.generation);
 
 if (self.shouldStop || self.alive.current === 0) {
 self.stopAudio();
+self.running = false;
 
 if (self.stopCallback && self.stopCallback instanceof Function) self.stopCallback(self.alive, self.generation);
 else if (self.shouldStop) statusMessage(`Stopped at generation ${self.generation}`);
@@ -263,7 +280,7 @@ position: [],
 audio.source = {highTone: createTone(220), lowTone: createTone(110), noise: createNoiseSource()};
 audio.output = audio.context.createGain();
 
-audio.context.listener.setPosition(0, 0, 0);
+audio.context.listener.setPosition(size/2, 0, size/2);
 audio.context.listener.setOrientation(0,0,0, 0,0,0);
 
 audio.output.gain.value = 0;
@@ -287,11 +304,17 @@ p.coneInnerAngle = 360;
 //p.coneOuterGain = 1;
 p.orientationX.value = p.orientationY.value = p.orientationZ.value  = 0;
 p.panningModel = panningModel;
-p.refDistance = 0.5;
-p.rollofFactor = 0.5;
+p.refDistance = 10000;
+p.rollofFactor = 0.01;
 
-p.positionX.value = -scale(c, 0,size, -1,1);
-p.positionZ.value = scale(r, 0,size, -1,1);
+//p.refDistance = 0.5;
+//p.rollofFactor = 0.5;
+
+p.positionX.value = c;
+p.positionZ.value = r;
+
+//p.positionX.value = -scale(c, 0,size, -1,1);
+//p.positionZ.value = scale(r, 0,size, -1,1);
 
 const highTone = audio.context.createGain();
 const lowTone = audio.context.createGain();

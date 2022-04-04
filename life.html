@@ -6,6 +6,8 @@
 </head>
 <body>
 <h1>Life</h1>
+<div id="status" aria-live="polite"></div>
+
 <fieldset id="parameters">
 <legend><h2>Parameters</h2></legend>
 <label>Grid size: <input type="number" id="size" value="10" min="3" max="100" accesskey="s"></label>
@@ -22,7 +24,9 @@
 <button id="alive">Alive counts</button>
 <button id="living">Living cells</button>
 
-</div><div>
+</div>
+
+<!--<div>
 <label>Test mode: <input type="checkbox" id="testMode" accesskey="t"></label>
 <label>Set: <input type="text" id="coordinates" value="0 0" accesskey="c"></label>
 <button id="step">Step</button>
@@ -31,9 +35,11 @@
 <button id="explore" accesskey="e">Explore</button>
 </span>
 </div>
+-->
 </fieldset>
 
-<div id="status" aria-live="polite"></div>
+<div role="application" id="grid">
+</div>
 
 <script type="module">
 import {Life, statusMessage} from "./life.js";
@@ -46,23 +52,27 @@ const living = $("#living");
 const initialize = $("#initialize");
 
 let _alive = _valueOf(alive), _generation = 0, _interval = _valueOf("interval");
+let life, display;
 
 
-const display = createDisplay(_valueOf("size"));
-let life = init(display);
-document.body.appendChild(display.grid);
-display.grid.addEventListener("change", e => {
-if (display?.checkboxMap.has(e.target)) {
-const index = display.checkboxMap.get(e.target);
-life.current.buffer[index] = e.target.checked? 1 : 0;
-} else {
-alert("invalid checkbox map!");
-throw new Error("invalid checkbox map!");
-} // if
-});
+$("#grid").addEventListener("keydown", gridKeyboardHandler);
 
-function init (display) {
+
+
+
+initialize.addEventListener("click", () => {
+if (life) life.stop();
+_generation = 0;
+[life, display] =   init();
+$("#grid").innerHTML = "";
+$("#grid").appendChild(display.grid);
+life.setBuffer(39, 47, 48, 58, 59);
+updateDisplay(display, life.current.buffer);
+}); // init
+
+function init () {
 const life = new Life(_valueOf("size"), _valueOf("seed"), _valueOf("panningModel"));
+const display = createDisplay(_valueOf("size"));
 
 life.displayCallback = (grid) => {
 updateDisplay(display, grid.buffer);
@@ -75,7 +85,18 @@ start.setAttribute("aria-pressed", "false");
 report("stopped");
 };
 
-return life;
+display.grid.addEventListener("change", e => {
+const checkbox = e.target;
+if (checkbox instanceof HTMLInputElement && display?.checkboxMap.has(checkbox)) {
+const index = display.checkboxMap.get(checkbox);
+life.current.buffer[index] = checkbox.checked? 1 : 0;
+} else {
+alert("invalid checkbox map!");
+throw new Error("invalid checkbox map!");
+} // if
+}); // checkbox listener
+
+return [life, display];
 } // init
 
 start.addEventListener("click", e => {
@@ -96,13 +117,37 @@ life.start(_interval, _generation);
 alive .addEventListener("click", () => report());
 living.addEventListener("click", () => reportLivingCells());
 
-initialize.addEventListener("click", () => {
-life.stop();
-_generation = 0;
-life = init(display);
-}); // init
 
-//$("#testMode").addEventListener("change", e => life.enableTestMode(e.target.checked));
+function gridKeyboardHandler (e) {
+const key = e.key;
+const element = e.target;
+if (not(element instanceof HTMLInputElement)) return;
+e.preventDefault();
+
+const commands = {
+"Enter": function () {
+if (e.ctrlKey) {
+life.sonifyPosition(display.checkboxMap.get(element));
+} // if
+}, // sonifyPosition
+
+"ArrowUp": function previousRow() {
+},
+"ArrowDown": function nextRow () {
+},
+
+"ArrowLeft": function previousColumn () {
+},
+"ArrowRight": function nextColumn () {
+}
+}; // commands
+
+if (command[key] instanceof Function) command[key]();
+} // grid keyboard handler
+
+/// test mode
+
+/*$("#testMode").addEventListener("change", e => life.enableTestMode(e.target.checked));
 
 $("#coordinates").addEventListener("click", e => {
 const values = e.target.value.split(" ")
@@ -160,6 +205,7 @@ return value;
 } // clamp
 } // if
 } // exploreGridHandler
+*/
 
 
 function getCoordinates (text) {
@@ -168,7 +214,6 @@ return [Number(values[0]), Number(values[1])];
 } // getCoordinates
 
 
-//life.setBuffer(39, 47, 48, 58, 59);
 
 
 function report (stopped) {
@@ -253,9 +298,13 @@ return x? (Number(x) || x)
 } // _get
 } // _valueOf
 
+
 function $ (selector, context = document) {
 return context.querySelector(selector);
 } // $
+
+function not (x) {return !Boolean(x);}
+
 </script>
 
 </body>
