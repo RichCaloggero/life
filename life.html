@@ -6,7 +6,7 @@
 </head>
 <body>
 <h1>Life</h1>
-<div id="status" aria-live="polite"></div>
+<div id="status" aria-atomic="true" aria-live="polite"></div>
 
 <fieldset id="parameters">
 <legend><h2>Parameters</h2></legend>
@@ -17,20 +17,19 @@
 
 <fieldset id="control">
 <legend><h2>Control</h2></legend>
-<div>
 <button id="initialize" accesskey="g">Initialize</button>
+<button id="test-seed" accesskey="p">Insert test seed</button>
 <br><label>Generation interval: <input type="number" id="interval" value="0.1" min="0.005" max="1.0" step="0.005" accesskey="i"></label>
-<button id="start" aria-pressed="false" accesskey="r">Start</button>
-<button id="alive">Alive counts</button>
+<button id="run" aria-pressed="false" accesskey="r">run</button>
+<button id="clear" accesskey="c">Clear</button>
+<br><button id="alive">Alive counts</button>
 <button id="living">Living cells</button>
 
-</div>
-
-<!--<div>
+<!--
+<div>
 <label>Test mode: <input type="checkbox" id="testMode" accesskey="t"></label>
 <label>Set: <input type="text" id="coordinates" value="0 0" accesskey="c"></label>
 <button id="step">Step</button>
-<button id="clear">Clear</button>
 <span role="application">
 <button id="explore" accesskey="e">Explore</button>
 </span>
@@ -38,15 +37,14 @@
 -->
 </fieldset>
 
-<div role="application" id="grid">
-</div>
+<div role="application" id="grid"></div>
 
 <script type="module">
 import {Life, statusMessage} from "./life.js";
 statusMessage("Ready.");
 
 const parameters = $("#parameters");
-const start = $("#start");
+const run = $("#run");
 const alive = $("#alive");
 const living = $("#living");
 const initialize = $("#initialize");
@@ -56,8 +54,10 @@ let life, display;
 
 
 $("#grid").addEventListener("keydown", gridKeyboardHandler);
-
-
+$("#grid").addEventListener("focus", () => {
+unfocusAll();
+focus(display.buffer[0]);
+});
 
 
 initialize.addEventListener("click", () => {
@@ -66,9 +66,20 @@ _generation = 0;
 [life, display] =   init();
 $("#grid").innerHTML = "";
 $("#grid").appendChild(display.grid);
+}); // init
+
+$("#test-seed").addEventListener("click", () => {
+if (not(life)) return;
 life.setBuffer(39, 47, 48, 58, 59);
 updateDisplay(display, life.current.buffer);
-}); // init
+});
+
+$("#clear").addEventListener("click", () => {
+if (not(life)) return;
+life.clear();
+updateDisplay(display, life.current.buffer);
+});
+
 
 function init () {
 const life = new Life(_valueOf("size"), _valueOf("seed"), _valueOf("panningModel"));
@@ -81,7 +92,7 @@ updateDisplay(display, grid.buffer);
 life.stopCallback = (alive, generation) => {
 _alive = alive;
 _generation = generation;
-start.setAttribute("aria-pressed", "false");
+run.setAttribute("aria-pressed", "false");
 report("stopped");
 };
 
@@ -99,19 +110,18 @@ throw new Error("invalid checkbox map!");
 return [life, display];
 } // init
 
-start.addEventListener("click", e => {
+run.addEventListener("click", e => {
 let state = e.target.getAttribute("aria-pressed") === "true";
-state = !state;
+state = not(state);
 e.target.setAttribute("aria-pressed", state? "true" : "false");
+statusMessage(`Starting: interval = ${_valueOf("interval")}`);
 
-if (state) life.start(_interval, _generation);
+if (state) life.start(_valueOf("interval"), _generation);
 else life.stop();
 }); // click handler
 
 $("#interval").addEventListener("change", e => {
-_interval = Number(e.target.value);
-life.stop();
-life.start(_interval, _generation);
+life.generationInterval = _valueOf("interval");
 });
 
 alive .addEventListener("click", () => report());
@@ -119,31 +129,73 @@ living.addEventListener("click", () => reportLivingCells());
 
 
 function gridKeyboardHandler (e) {
+if (not(e.target instanceof HTMLInputElement)) return;
 const key = e.key;
-const element = e.target;
-if (not(element instanceof HTMLInputElement)) return;
-e.preventDefault();
+const buffer = display.buffer;
+const size = _valueOf("size");
+const cellCount = size*size;
+const element = getFocus();
+const index = display.checkboxMap.get(element);
+
 
 const commands = {
-"Enter": function () {
-if (e.ctrlKey) {
-life.sonifyPosition(display.checkboxMap.get(element));
-} // if
-}, // sonifyPosition
-
 "ArrowUp": function previousRow() {
+if (index >= size) focus(buffer[index-size]);
 },
 "ArrowDown": function nextRow () {
+if (index+size < cellCount) focus(buffer[index+size]);
 },
 
-"ArrowLeft": function previousColumn () {
+"ArrowLeft": function previous () {
+if (e.altKey && index%size > 0) focus(previousCell(index));
+else if (e.ctrlKey) focus(previousLiveCell(index));
+else focus(previousCell(index));
 },
-"ArrowRight": function nextColumn () {
-}
+"ArrowRight": function next () {
+if (e.altKey && index%size < size-1) focus(nextCell(index));
+else if (e.ctrlKey) focus(nextLiveCell(index));
+else focus(nextCell(index));
+},
+
+"Enter": function () {
+if (e.ctrlKey) life.sonifyPosition(index);
+}, // sonifyPosition
 }; // commands
 
-if (command[key] instanceof Function) command[key]();
+if (commands[key] instanceof Function) {
+e.preventDefault();
+commands[key]();
+} // if
+
+
+function nextCell (start) {return start<buffer.length-1? buffer[start+1] : buffer[start];}
+function nextLiveCell (start) {
+const cell = buffer.find((x,i) => i>start && buffer[i].checked);
+return cell? cell : start;
+} // nextLiveCell
+
+function previousCell (start) {return start>0? buffer[start-1] : buffer[start];}
+function previousLiveCell (start) {
+const cell = buffer.reverse.find((x,i) => i>start && buffer[i].checked);
+return cell? cell : start;
+} // previousLiveCell
 } // grid keyboard handler
+
+function unfocusAll () {display.grid.querySelectorAll("[tabindex='0']").forEach(x => x.tabIndex = -1);}
+function getFocus () {return $("[tabindex='0']", display.grid);}
+
+function focus (cell, announceCoordinates = true) {
+const index = display.checkboxMap.get(cell);
+const size = life.size;
+const r = Math.floor(index/size) + 1;
+const c = index % size + 1;
+
+unfocusAll();
+cell.tabIndex = 0;
+cell.focus();
+
+if (announceCoordinates) setTimeout(() => statusMessage(`${r}, ${c}`), 700);
+} // focus
 
 /// test mode
 
@@ -258,12 +310,14 @@ const row = document.createElement("tr");
 
 for (let c=0; c<size; c++) {
 const cell = document.createElement("td");
+
 const checkbox = document.createElement("input");
 checkboxes[index] = checkbox;
 checkboxMap.set(checkbox, index);
 index += 1;
 
-checkbox.setAttribute("type", "checkbox");
+checkbox.type = "checkbox";
+checkbox.tabIndex = -1;
 cell.appendChild(checkbox);
 row.appendChild(cell);
 } // loop over columns
@@ -271,6 +325,7 @@ row.appendChild(cell);
 table.appendChild(row);
 } // loop over rows
 
+checkboxes[0].tabIndex = 0;
 return {grid: table, buffer: checkboxes, checkboxMap};
 } // createDisplay
 

@@ -153,12 +153,6 @@ values.flat(2).forEach(value => this.current.buffer[value] = 1);
 } // class Life
 
 function _tick (self) {
-if (self.alive.current === 0) return;
-self.generation += 1;
-if (self.generation % 50 === 0) statusMessage(`generation ${self.generation}`);
-self.present();
-self.alive = calculateNextGeneration(self.current, self.next, self.generation);
-
 if (self.shouldStop || self.alive.current === 0) {
 self.stopAudio();
 self.running = false;
@@ -170,9 +164,25 @@ else statusMessage(`All dead at generation ${self.generation}: alive = ${self.al
 return self.alive;
 } // if
 
+const shouldReport = self.generationInterval > 0.03? 50
+: self.generationInterval > 0.02? 100
+: self.generationInterval > 0.01? 200
+: 0;
+self.generation += 1;
+if (shouldReport > 0 && self.generation % shouldReport === 0) statusMessage(`generation ${self.generation}`);
+self.present();
+self.alive = calculateNextGeneration(self.current, self.next, self.generation);
+
+
 self.flip();
-if (!self.testMode) setTimeout(() => _tick(self), self.generationInterval * 1000);
-else statusMessage(`Generation ${self.generation}`);
+if (self.testMode) statusMessage(`Generation ${self.generation}`);
+else setTimeout(() => {
+/*console.log(`interval: ${self.generationInterval}`);
+self.stopAudio();
+return;
+*/
+_tick(self)
+}, self.generationInterval * 1000);
 return self.alive;
 } // _tick
 
