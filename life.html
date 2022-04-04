@@ -6,7 +6,7 @@
 </head>
 <body>
 <h1>Life</h1>
-<div id="status" aria-atomic="true" aria-live="polite"></div>
+<div id="status" aria-atomic="true" aria-live="assertive"></div>
 
 <fieldset id="parameters">
 <legend><h2>Parameters</h2></legend>
@@ -18,7 +18,7 @@
 <fieldset id="control">
 <legend><h2>Control</h2></legend>
 <button id="initialize" accesskey="g">Initialize</button>
-<button id="test-seed" accesskey="p">Insert test seed</button>
+<button id="test-seed" accesskey="x">Insert test seed</button>
 <br><label>Generation interval: <input type="number" id="interval" value="0.1" min="0.005" max="1.0" step="0.005" accesskey="i"></label>
 <button id="run" aria-pressed="false" accesskey="r">run</button>
 <button id="clear" accesskey="c">Clear</button>
@@ -37,10 +37,11 @@
 -->
 </fieldset>
 
-<div role="application" id="grid"></div>
+<div id="grid" role="region" aria-roledescription="grid" hidden></div>
 
 <script type="module">
 import {Life, statusMessage} from "./life.js";
+import {wrap} from "./grid.js";
 statusMessage("Ready.");
 
 const parameters = $("#parameters");
@@ -64,9 +65,12 @@ initialize.addEventListener("click", () => {
 if (life) life.stop();
 _generation = 0;
 [life, display] =   init();
-$("#grid").innerHTML = "";
-$("#grid").appendChild(display.grid);
-}); // init
+$("#grid").innerHTML = `
+<div class="contents" role="application"></div>
+`;
+$("#grid .contents").insertAdjacentElement("afterBegin", display.grid);
+$("#grid").hidden = false;
+}); // initialize
 
 $("#test-seed").addEventListener("click", () => {
 if (not(life)) return;
@@ -139,22 +143,41 @@ const index = display.checkboxMap.get(element);
 
 
 const commands = {
+"F1": help,
+"?": help,
+
 "ArrowUp": function previousRow() {
+if (e.altKey) {
 if (index >= size) focus(buffer[index-size]);
+} else {
+focus(buffer[wrap(index-size, cellCount-1)]);
+} // if
 },
 "ArrowDown": function nextRow () {
+if (e.altKey) {
 if (index+size < cellCount) focus(buffer[index+size]);
+} else {
+focus(buffer[wrap(index+size, cellCount-1)]);
+} // if
 },
 
 "ArrowLeft": function previous () {
-if (e.altKey && index%size > 0) focus(previousCell(index));
-else if (e.ctrlKey) focus(previousLiveCell(index));
-else focus(previousCell(index));
+if (e.altKey) {
+if (index%size > 0) focus(previousCell(index));
+} else if (e.ctrlKey) {
+focus(previousLiveCell(index));
+} else {
+focus(buffer[wrap(index-1, cellCount-1)]);
+} // if
 },
 "ArrowRight": function next () {
-if (e.altKey && index%size < size-1) focus(nextCell(index));
-else if (e.ctrlKey) focus(nextLiveCell(index));
-else focus(nextCell(index));
+if (e.altKey) {
+if (index%size < size-1) focus(nextCell(index));
+} else if (e.ctrlKey) {
+focus(nextLiveCell(index));
+} else {
+focus(buffer[wrap(index+1, cellCount-1)]);
+} // if
 },
 
 "Enter": function () {
@@ -162,7 +185,7 @@ if (e.ctrlKey) life.sonifyPosition(index);
 }, // sonifyPosition
 }; // commands
 
-if (commands[key] instanceof Function) {
+if (commands[key] && commands[key] instanceof Function) {
 e.preventDefault();
 commands[key]();
 } // if
@@ -171,30 +194,77 @@ commands[key]();
 function nextCell (start) {return start<buffer.length-1? buffer[start+1] : buffer[start];}
 function nextLiveCell (start) {
 const cell = buffer.find((x,i) => i>start && buffer[i].checked);
-return cell? cell : start;
+return cell? cell : buffer[start];
 } // nextLiveCell
 
 function previousCell (start) {return start>0? buffer[start-1] : buffer[start];}
 function previousLiveCell (start) {
-const cell = buffer.reverse.find((x,i) => i>start && buffer[i].checked);
-return cell? cell : start;
+const cell = buffer.entries().filter(x => x[0] < start && x[1].checked).at(-1)[1];
+return cell? cell : buffer[start];
 } // previousLiveCell
+
+function help () {
+const text = `<table>
+<tr><th>key</th> <th>Description</th></tr>
+<tr><th>alt + arrow</th>
+<td>move in indicated direction, stopping at boundaries</td>
+</tr><tr>
+<th>unmodified arrow</th>
+<td>move in indicated direction, continuing across row boundaries, wrapping at first / last cell</td>
+</tr><tr>
+<th>control + right / left arrows</th>
+<td>next / previous live cell, continuing across row boundaries, no wrap</td>
+</tr><tr>
+<th>control + enter</th>
+<td>Play a sound corresponding to the grid position of currently focused cell</td>
+</tr></table>
+`; // text
+
+const modal = `<div class="modal" role="dialog" aria-model="true" aria-labelledby="help-modal-title">
+<div class="header">
+<h3>Grid Navigation</h3>
+<button class="close">Close</button>
+</div>
+<div class="body"></div>
+</div>
+`; // dialog
+
+const container = document.createElement("div");
+container.innerHTML = modal;
+$(".body", container).innerHTML = text;
+document.body.appendChild(container);
+container.addEventListener("click", () => {
+container.remove()
+focus(getFocus());
+});
+container.addEventListener("keydown", e => {
+if (e.key === "Escape") e.target.click();
+});
+
+$(".close", container).focus();
+} // help
 } // grid keyboard handler
 
-function unfocusAll () {display.grid.querySelectorAll("[tabindex='0']").forEach(x => x.tabIndex = -1);}
+function unfocusAll () {
+display.grid.querySelectorAll("[tabindex='0']").forEach(x => {
+x.tabIndex = -1;
+});
+} // unfocus
+
 function getFocus () {return $("[tabindex='0']", display.grid);}
 
 function focus (cell, announceCoordinates = true) {
 const index = display.checkboxMap.get(cell);
-const size = life.size;
+/*const size = life.size;
 const r = Math.floor(index/size) + 1;
 const c = index % size + 1;
+*/
 
 unfocusAll();
 cell.tabIndex = 0;
 cell.focus();
 
-if (announceCoordinates) setTimeout(() => statusMessage(`${r}, ${c}`), 700);
+//if (announceCoordinates) setTimeout(() => statusMessage(`${r}, ${c}`), 700);
 } // focus
 
 /// test mode
@@ -318,6 +388,8 @@ index += 1;
 
 checkbox.type = "checkbox";
 checkbox.tabIndex = -1;
+checkbox.setAttribute("aria-label", `${r+1}, ${c+1}`);
+
 cell.appendChild(checkbox);
 row.appendChild(cell);
 } // loop over columns
@@ -336,8 +408,6 @@ display.buffer[i].checked = (buffer[i] === 0? false : true);
 
 const checkCount = display.buffer.reduce((a, x) => x.checked? a += 1 : a += 0, 0);
 const aliveCount = buffer.reduce((a, x) => a += x, 0);
-alert(`checked: ${checkCount}, alive: ${aliveCount}`);
-
 } // updateDisplay
 
 
