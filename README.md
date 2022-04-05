@@ -10,7 +10,7 @@ There is a rutamentary  display as well using checkboxes. THe display is updated
 
 You need to run the simulation from a web server since it uses JS modules. You can run it directly from github:
 
-- [Run the Game of Life](https://RichCaloggero.github.io/RichCaloggero/life.git/blob/master/life.html)
+- [Run the Game of Life](./life.html)
 
 ## Setup
 
