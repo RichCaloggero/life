@@ -14,15 +14,18 @@ const columnIndex = Math.floor(index%size);
 
 const commands = {
 "F1": {
+preventDefault: true,
 description: "Show keyboard help",
 command: help
 },
 "?": {
+preventDefault: true,
 description: "Show keyboard help",
 command: help
 },
 
 "control Enter": {
+preventDefault: true,
 description: "Sonify current position in grid",
 command: function sonifyPosition () {
 life.sonifyPosition(index);
@@ -30,6 +33,7 @@ life.sonifyPosition(index);
 },
 
 "control g": {
+preventDefault: true,
 description: "Shift focus to grid",
 command: function navigateToGrid () {display.focus(display.getFocus());}
 },
@@ -116,7 +120,7 @@ display.focus(buffer[wrap(index+1, cellCount-1)]);
 }; // commands
 
 if (key && commands[key]?.command instanceof Function) {
-e.preventDefault();
+if (commands[key].preventDefault) e.preventDefault();
 commands[key].command();
 } // if
 
@@ -156,13 +160,15 @@ const modal = `<div class="modal" role="dialog" aria-modal="true" aria-labelledb
 </div>
 `; // dialog
 
+const returnFocus = document.activeElement === document.body? display.getFocus() : document.activeElement;
 const container = document.createElement("div");
 container.innerHTML = modal;
 $(".body", container).innerHTML = text;
 document.body.appendChild(container);
 container.addEventListener("click", () => {
 container.remove()
-display.focus(display.getFocus());
+returnFocus.focus();
+//display.focus(display.getFocus());
 });
 container.addEventListener("keydown", e => {
 if (e.key === "Escape") e.target.click();

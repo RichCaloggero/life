@@ -10,8 +10,8 @@
 
 <fieldset id="parameters">
 <legend><h2>Parameters</h2></legend>
-<label>Grid size: <input type="number" id="size" value="10" min="3" max="100" accesskey="s"></label>
-<br><label>Initially living: <input type="number" id="seed" value="0" min="0" max="1" step="0.01" accesskey="l"></label>
+<label>Grid size: <input autofocus type="number" id="size" value="10" min="3" max="100" accesskey="s"></label>
+<br><label>Initially living: <input type="range" id="seed" value="0" min="0" max="1" step="0.01" accesskey="l"></label>
 <br><label>Panning model: <input type="text" id="panningModel" value="HRTF" accesskey="p"></label>
 </fieldset>
 
@@ -45,7 +45,7 @@ import {wrap} from "./grid.js";
 import {KeyboardKey} from "./keyboard.js";
 import {keyboardHandler} from "./commands.js";
 import {$, _valueOf} from "./dom.js";
-statusMessage("Ready.");
+statusMessage("Click the initialize button to begin; press control+g to navigate to the grid once it has been initialized; press f1 for help.");
 
 const parameters = $("#parameters");
 const run = $("#run");
