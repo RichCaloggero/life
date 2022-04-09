@@ -79,6 +79,7 @@ $("#test-seed").addEventListener("click", () => {
 if (not(life)) return;
 life.setBuffer(39, 47, 48, 58, 59);
 updateDisplay(display, life.current.buffer);
+statusMessage(`${livingCells(life.current).length} living cells created.`);
 });
 
 $("#clear").addEventListener("click", () => {
@@ -90,7 +91,7 @@ updateDisplay(display, life.current.buffer);
 
 function init () {
 const life = new Life(_valueOf("size"), _valueOf("seed"), _valueOf("panningModel"));
-const display = createDisplay(_valueOf("size"));
+const display = createDisplay(life, _valueOf("size"));
 
 life.displayCallback = (grid) => {
 updateDisplay(display, grid.buffer);
@@ -168,7 +169,7 @@ statusMessage(`${life.generation}: ${life.alive.current}, ${life.alive.next} ${s
 } // report
 
 function reportLivingCells () {
-statusMessage(`current: ${livingCells(life.current).join(", ")}\n
+statusMessage(`current generation: ${livingCells(life.current).join(", ")}\n
 next: ${livingCells(life.next).join(", ")}
 `);
 } // reportLivingCells
@@ -184,7 +185,7 @@ return g1.buffer.every((x,i) => g2.buffer[i] === x);
 } // compareGrids
 
 
-function createDisplay (size) {
+function createDisplay (life, size) {
 const table = document.createElement("table");
 const checkboxes = [];
 const checkboxMap = new Map();
@@ -214,7 +215,7 @@ table.appendChild(row);
 
 checkboxes[0].tabIndex = 0;
 return {
-size, grid: table, buffer: checkboxes, checkboxMap,
+size, life, grid: table, buffer: checkboxes, checkboxMap,
 unfocusAll : function () {
 this.grid.querySelectorAll("[tabindex='0']").forEach(x => {
 x.tabIndex = -1;

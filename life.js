@@ -300,23 +300,24 @@ console.debug("audio initialized\n");
 
 for (let r = 0; r < size; r++) {
 for (let c = 0; c < size; c++) {
-audio.position[r*size+c] = createPositioner(r, c, size, panningModel);
+audio.position[r*size + c] = createPositioner(r, c, size, panningModel);
 } // for c
 } // for r
 //console.debug("audio positioners created\n", audio);
 return audio;
 
 
-function createPositioner (r, c, size, panningModel = "equalpower") {
+function createPositioner (r, c, size, panningModel = "HRTF") {
 const p = audio.context.createPanner();
 p.coneInnerAngle = 360;
-//p.coneOuterAngle = 0;
-//p.coneOuterGain = 1;
+p.maxDistance = size/2 + 1;
+p.refDistance = size/4;
+p.distanceModel = "inverse";
+p.rollofFactor = 0.5;
 p.orientationX.value = p.orientationY.value = p.orientationZ.value  = 0;
 p.panningModel = panningModel;
-p.refDistance = 10000;
-p.rollofFactor = 0.01;
-
+//p.coneOuterAngle = 0;
+//p.coneOuterGain = 1;
 //p.refDistance = 0.5;
 //p.rollofFactor = 0.5;
 

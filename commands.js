@@ -4,12 +4,14 @@ import {$} from "./dom.js";
 
 export function keyboardHandler(e, display) {
 const key = new KeyboardKey(e).toString();
+if (not(display) || not(key)) return;
 const buffer = display?.buffer;
-const size = display?.size || 1;
+const size = display?.size;
 const cellCount = size*size;
-const index = display?.checkboxMap.get(display.getFocus()) || 0;
+const index = display?.checkboxMap.get(display.getFocus());
 const rowIndex = Math.floor(index/size);
 const columnIndex = Math.floor(index%size);
+const life = display.life;
 
 
 const commands = {
@@ -88,7 +90,7 @@ if (index%size > 0) display.focus(previousCell(index));
 },
 "control ArrowLeft": {
 description: "Move to previous live cell",
-command: function previousLiveCell () {
+command: function movePreviousLiveCell () {
 display.focus(previousLiveCell(index));
 } // previousLiveCell
 },
@@ -105,11 +107,11 @@ command: function nextColumn () {
 if (index%size < size-1) display.focus(nextCell(index));
 } // nextColumn
 },
-"Control ArrowRight": {
+"control ArrowRight": {
 description: "Move to next live cell",
-command: function nextLiveCell () {
+command: function moveNextLiveCell () {
 display.focus(nextLiveCell(index));
-} // nextLiveCell
+} // moveNextLiveCell
 },
 "ArrowRight": {
 description: "Move to next column with wrap",
@@ -126,14 +128,14 @@ commands[key].command();
 
 function nextCell (start) {return start<buffer.length-1? buffer[start+1] : buffer[start];}
 function nextLiveCell (start) {
-const cell = buffer.find((x,i) => i>start && buffer[i].checked);
-return cell? cell : buffer[start];
+const cell = [...buffer.entries()].filter(x => x[0] > start && x[1].checked);
+return cell.length > 0? cell[0][1] : buffer[start];
 } // nextLiveCell
 
 function previousCell (start) {return start>0? buffer[start-1] : buffer[start];}
 function previousLiveCell (start) {
-const cell = buffer.entries().filter(x => x[0] < start && x[1].checked).at(-1)[1];
-return cell? cell : buffer[start];
+const cell = [...buffer.entries()].filter(x => x[0] < start && x[1].checked);
+return cell.length > 0? cell.at(-1)[1] : buffer[start];
 } // previousLiveCell
 
 function help () {
@@ -183,3 +185,5 @@ return Object.keys(commands).map(key => [key, commands[key].description]);
 } // help
 
 } // keyboardHandler
+
+function not(x) {return !Boolean(x);}
