@@ -37,7 +37,7 @@
 -->
 </fieldset>
 
-<div id="grid" role="region" aria-roledescription="grid" hidden></div>
+<div id="grid" role="application" aria-roledescription="grid" hidden></div>
 
 <script type="module">
 import {Life, statusMessage} from "./life.js";
@@ -45,7 +45,7 @@ import {wrap} from "./grid.js";
 import {KeyboardKey} from "./keyboard.js";
 import {keyboardHandler} from "./commands.js";
 import {$, _valueOf} from "./dom.js";
-statusMessage("Click the initialize button to begin; press control+g to navigate to the grid once it has been initialized; press f1 for help.");
+setTimeout(() => statusMessage("Click the initialize button to begin; press control+g to navigate to the grid once it has been initialized; press f1 for help."), 300);
 
 const parameters = $("#parameters");
 const run = $("#run");
@@ -68,10 +68,8 @@ initialize.addEventListener("click", () => {
 if (life) life.stop();
 _generation = 0;
 [life, display] =   init();
-$("#grid").innerHTML = `
-<div class="contents" role="application"></div>
-`;
-$("#grid .contents").insertAdjacentElement("afterBegin", display.grid);
+$("#grid").innerHTML = "";
+$("#grid").insertAdjacentElement("afterBegin", display.grid);
 $("#grid").hidden = false;
 }); // initialize
 
